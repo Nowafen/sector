@@ -1,0 +1,561 @@
+#!/bin/bash
+
+# Color definitions
+GREEN='\033[1;32m'
+WHITE='\033[1;37m'
+NC='\033[0m'
+
+# User-Agent
+USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+
+# Logo
+display_logo() {
+    echo -e "${WHITE}"
+    echo "       
+   ________  _____/ /_____  _____
+  / ___/ _ \/ ___/ __/ __ \/ ___/
+ (__  )  __/ /__/ /_/ /_/ / /    
+/____/\___/\___/\__/\____/_/     
+                                 
+"
+    echo -e "${WHITE}Created by MNM${NC}"
+}
+
+# Help menu
+display_help() {
+    display_logo
+    echo -e "${GREEN}sector - A tool for vulnerability analysis${NC}"
+    echo -e "${GREEN}Usage:${NC}"
+    echo -e "${WHITE} sector.sh [options]"
+    echo -e "${GREEN}Options:${NC}"
+    echo -e "${WHITE}  -d {domain}    Specify a single target domain (e.g., example.com)"
+    echo -e "${WHITE}  -l {file}      Specify a file containing a list of domains to scan (e.g., file-domains.txt)"
+    echo -e "${WHITE}  -vhost {ip}    Specify an IP for virtual host scanning (e.g., http://5.5.5.5)"
+    echo -e "${WHITE}  -nuclei        Enable Nuclei scanning for vulnerabilities"
+    echo -e "${WHITE}  -h             Display this help menu"
+    echo -e "${GREEN}Examples:${NC}"
+    echo -e "${WHITE}  sector.sh -d example.com"
+    echo -e "${WHITE}  sector.sh -d example.com -vhost http://5.5.5.5"
+    echo -e "${WHITE}  sector.sh -d example.com -nuclei"
+    echo -e "${WHITE}  sector.sh -l file-domains.txt -nuclei"
+    exit 0
+}
+
+# Check and install dependencies
+check_dependencies() {
+    local tools=("subfinder" "assetfinder" "amass" "katana" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "nuclei")
+    local pd_tools=("subfinder" "katana" "nuclei") # ProjectDiscovery tools
+    local non_pd_tools=("assetfinder" "amass" "hakrawler" "waybackurls" "gf" "anew" "ffuf") # Non-ProjectDiscovery tools
+    local missing_tools=()
+
+    # Check if Go is installed
+    if ! command -v go &> /dev/null; then
+        echo -e "${GREEN}Error: Go is not installed. Please install Go (version 1.19 or higher) and try again.${NC}"
+        exit 1
+    fi
+
+    # Check and install pdtm
+    if ! command -v pdtm &> /dev/null; then
+        echo -e "${GREEN}Please wait, installing pdtm...${NC}"
+        go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest &> /dev/null
+        if [[ $? -ne 0 ]]; then
+            echo -e "${GREEN}Error: Failed to install pdtm. Please check your Go setup and try again.${NC}"
+            exit 1
+        fi
+        # Ensure pdtm binary is in PATH
+        export PATH=$PATH:$HOME/go/bin
+    fi
+
+    # Install all ProjectDiscovery tools using pdtm
+    echo -e "${GREEN}Please wait, checking and installing ProjectDiscovery tools...${NC}"
+    pdtm -ia &> /dev/null
+    if [[ $? -ne 0 ]]; then
+        echo -e "${GREEN}Error: Failed to install ProjectDiscovery tools using pdtm.${NC}"
+        exit 1
+    fi
+
+    # Check non-ProjectDiscovery tools
+    for tool in "${non_pd_tools[@]}"; do
+        if ! command -v "$tool" &> /dev/null; then
+            missing_tools+=("$tool")
+        fi
+    done
+
+    # Install missing non-ProjectDiscovery tools
+    for tool in "${missing_tools[@]}"; do
+        echo -e "${GREEN}Please wait, installing $tool...${NC}"
+        case $tool in
+            assetfinder)
+                go install -v github.com/tomnomnom/assetfinder@latest &> /dev/null
+                ;;
+            amass)
+                go install -v github.com/OWASP/Amass/v3/...@latest &> /dev/null
+                ;;
+            hakrawler)
+                go install -v github.com/hakluke/hakrawler@latest &> /dev/null
+                ;;
+            waybackurls)
+                go install -v github.com/tomnomnom/waybackurls@latest &> /dev/null
+                ;;
+            gf)
+                go install -v github.com/tomnomnom/gf@latest &> /dev/null
+                # Copy gf patterns if needed
+                if [[ ! -d "$HOME/.gf" ]]; then
+                    mkdir -p "$HOME/.gf"
+                    cp -r $HOME/go/src/github.com/tomnomnom/gf/examples/* "$HOME/.gf/" &> /dev/null
+                fi
+                ;;
+            anew)
+                go install -v github.com/tomnomnom/anew@latest &> /dev/null
+                ;;
+            ffuf)
+                go install -v github.com/ffuf/ffuf@latest &> /dev/null
+                ;;
+        esac
+        if [[ $? -ne 0 ]]; then
+            echo -e "${GREEN}Error: Failed to install $tool. Please install it manually and try again.${NC}"
+            exit 1
+        fi
+    done
+
+    # Verify all tools are installed
+    for tool in "${tools[@]}"; do
+        if ! command -v "$tool" &> /dev/null; then
+            echo -e "${GREEN}Error: $tool is still not installed. Please install it manually and try again.${NC}"
+            exit 1
+        fi
+    done
+
+    echo -e "${GREEN}All dependencies are installed. Starting sector...${NC}"
+}
+
+# Validate domain format
+validate_domain() {
+    local domain=$1
+    if [[ "$domain" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        return 0
+    else
+        echo -e "${GREEN}Warning: Invalid domain format: $domain, skipping.${NC}"
+        return 1
+    fi
+}
+
+# Draw dynamic progress bar
+draw_progress() {
+    local width=$1
+    local percent=$2
+    local message=$3
+    local bar_style=$4
+    local filled=$((width * percent / 100))
+    local empty=$((width - filled))
+    local bar=""
+    local fill_char
+    case $bar_style in
+        0) fill_char="=" ;;
+        1) fill_char="-" ;;
+        2) fill_char="~" ;;
+        *) fill_char="=" ;;
+    esac
+    for ((i=0; i<filled; i++)); do bar+="$fill_char"; done
+    [[ $filled -lt $width ]] && bar+=">"
+    for ((i=0; i<empty; i++)); do bar+=" "; done
+    printf "\r${GREEN}%s [%s] %d%%${NC}" "$message" "$bar" "$percent"
+}
+
+# Animate progress bar
+animate_progress() {
+    local message=$1
+    local total_steps=$2
+    local current_step=$3
+    local pid=$4
+    local bar_styles=("0" "1" "2")
+    local bar_index=0
+    while kill -0 "$pid" 2>/dev/null; do
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" "${bar_styles[bar_index]}"
+        ((bar_index=(bar_index+1)%3))
+        sleep 0.8
+    done
+}
+
+# Remove duplicate URLs based on parameter count and names
+remove_duplicate_urls() {
+    local input_file=$1
+    local output_file=$2
+    if [[ ! -s "$input_file" ]]; then
+        echo -e "${GREEN}Warning: Input file $input_file is empty or does not exist.${NC}"
+        touch "$output_file"
+        return
+    fi
+
+    # Create a temporary file for processed URLs
+    local temp_file=$(mktemp)
+    > "$temp_file"
+
+    # Read URLs, extract base URL and parameters, and keep one URL per unique parameter set
+    awk -F'?' '{print $1, $2}' "$input_file" | while IFS=' ' read -r base params; do
+        if [[ -z "$params" ]]; then
+            echo "$base" >> "$temp_file"
+            continue
+        fi
+        # Sort parameters to normalize them
+        sorted_params=$(echo "$params" | tr '&' '\n' | sort | tr '\n' '&' | sed 's/&$//')
+        echo "$base?$sorted_params" >> "$temp_file"
+    done
+
+    # Remove duplicates based on normalized URLs
+    sort -u "$temp_file" > "$output_file"
+    rm -f "$temp_file"
+    echo -e "${GREEN}Removed duplicate URLs from $input_file, saved to $output_file${NC}"
+}
+
+# Run Nuclei scan
+run_nuclei_scan() {
+    local output_dir=$1
+    local subdomains_file=$2
+    local xss_file="${output_dir}/gf/gf_xss.txt"
+    local sqli_file="${output_dir}/gf/gf_sqli.txt"
+    local nuclei_output="${output_dir}/nuclei_results.txt"
+    local temp_output=$(mktemp)
+    > "$nuclei_output"
+
+    total_steps=3
+    current_step=0
+
+    # Scan XSS vulnerabilities
+    if [[ -s "$xss_file" ]]; then
+        message="Running Nuclei scan on $xss_file for XSS"
+        stdbuf -oL nuclei -l "$xss_file" -tags xss -o "$temp_output" -silent -H "User-Agent: $USER_AGENT" 2>/dev/null &
+        pid=$!
+        animate_progress "$message" $total_steps $current_step $pid
+        wait $pid
+        ((current_step++))
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+        if [[ -s "$temp_output" ]]; then
+            echo -e "${GREEN}[Nuclei XSS Alerts]${NC}"
+            cat "$temp_output"
+            cat "$temp_output" >> "$nuclei_output"
+            echo "" >> "$nuclei_output"
+        fi
+    else
+        echo -e "${GREEN}Warning: XSS file $xss_file is empty or does not exist, skipping XSS scan.${NC}"
+        ((current_step++))
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    fi
+
+    # Scan SQLi vulnerabilities
+    if [[ -s "$sqli_file" ]]; then
+        message="Running Nuclei scan on $sqli_file for SQLi"
+        stdbuf -oL nuclei -l "$sqli_file" -tags sqli,sqlinjection,blindsqli -o "$temp_output" -silent -H "User-Agent: $USER_AGENT" 2>/dev/null &
+        pid=$!
+        animate_progress "$message" $total_steps $current_step $pid
+        wait $pid
+        ((current_step++))
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+        if [[ -s "$temp_output" ]]; then
+            echo -e "${GREEN}[Nuclei SQLi Alerts]${NC}"
+            cat "$temp_output"
+            cat "$temp_output" >> "$nuclei_output"
+            echo "" >> "$nuclei_output"
+        fi
+    else
+        echo -e "${GREEN}Warning: SQLi file $sqli_file is empty or does not exist, skipping SQLi scan.${NC}"
+        ((current_step++))
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    fi
+
+    # Scan subdomains with http/mnm/ template
+    if [[ -s "$subdomains_file" ]]; then
+        message="Running Nuclei scan on $subdomains_file with http/mnm/ template"
+        stdbuf -oL nuclei -l "$subdomains_file" -t http/mnm/ -o "$temp_output" -silent -H "User-Agent: $USER_AGENT" 2>/dev/null &
+        pid=$!
+        animate_progress "$message" $total_steps $current_step $pid
+        wait $pid
+        ((current_step++))
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+        if [[ -s "$temp_output" ]]; then
+            echo -e "${GREEN}[Nuclei Subdomains Alerts]${NC}"
+            cat "$temp_output"
+            cat "$temp_output" >> "$nuclei_output"
+            echo "" >> "$nuclei_output"
+        fi
+    else
+        echo -e "${GREEN}Warning: Subdomains file $subdomains_file is empty or does not exist, skipping subdomains scan.${NC}"
+        ((current_step++))
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    fi
+
+    rm -f "$temp_output"
+    echo -e "${GREEN}Nuclei scan completed, results saved to $nuclei_output${NC}"
+}
+
+# Process a single domain
+process_domain() {
+    local DOMAIN=$1
+    local VHOST_IP=$2
+    validate_domain "$DOMAIN" || return
+    echo -e "${GREEN}Starting processing for domain: $DOMAIN${NC}"
+    OUTPUT_DIR="recon_${DOMAIN}"
+    GF_DIR="${OUTPUT_DIR}/gf"
+    SUBDOMAINS_FILE="${OUTPUT_DIR}/subdomains"
+    JS_URLS_FILE="${OUTPUT_DIR}/ALLjs.txt"
+    VULNERABLE_FILE="${OUTPUT_DIR}/vulnerable.txt"
+    NUCLEI_FILE="${OUTPUT_DIR}/nuclei_results.txt"
+
+    if [[ -d "$OUTPUT_DIR" ]]; then
+        echo -e "${GREEN}Warning: Directory $OUTPUT_DIR exists, skipping $DOMAIN.${NC}"
+        return
+    fi
+
+    mkdir -p "$OUTPUT_DIR"
+    mkdir -p "$GF_DIR"
+
+    # Stage 1: Subdomain Enumeration
+    total_steps=4
+    [[ -n "$VHOST_IP" ]] && total_steps=5
+    current_step=0
+    message="Enumerating subdomains for $DOMAIN"
+    stdbuf -oL subfinder -d "$DOMAIN" -all -silent > "${OUTPUT_DIR}/subfinder.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    stdbuf -oL assetfinder --subs-only "$DOMAIN" > "${OUTPUT_DIR}/assetfinder.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    stdbuf -oL amass enum -d "$DOMAIN" > "${OUTPUT_DIR}/amass.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    cat "${OUTPUT_DIR}"/*.txt 2>/dev/null | sort -u > "$SUBDOMAINS_FILE" 2>/dev/null
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+
+    # If vhost is provided, perform virtual host scanning with ffuf
+    if [[ -n "$VHOST_IP" ]]; then
+        message="Performing virtual host scanning for $DOMAIN on $VHOST_IP"
+        stdbuf -oL ffuf -w "$SUBDOMAINS_TXT" -u "$VHOST_IP/" -H "Host: FUZZ.$DOMAIN" -H "User-Agent: $USER_AGENT" -o "${OUTPUT_DIR}/vhost.txt" -silent 2>/dev/null &
+        pid=$!
+        animate_progress "$message" $total_steps $current_step $pid
+        wait $pid
+        ((current_step++))
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+        if [[ -s "${OUTPUT_DIR}/vhost.txt" ]]; then
+            grep -oE "[a-zA-Z0-9.-]+\.$DOMAIN" "${OUTPUT_DIR}/vhost.txt" 2>/dev/null | sort -u >> "$SUBDOMAINS_FILE"
+            cat "$SUBDOMAINS_FILE" | sort -u > "${OUTPUT_DIR}/temp_subdomains.txt"
+            mv "${OUTPUT_DIR}/temp_subdomains.txt" "$SUBDOMAINS_FILE"
+        fi
+    fi
+
+    subdomains_count=$(wc -l < "$SUBDOMAINS_FILE" 2>/dev/null || echo 0)
+    rm -f "${OUTPUT_DIR}/subfinder.txt" "${OUTPUT_DIR}/assetfinder.txt" "${OUTPUT_DIR}/amass.txt" "${OUTPUT_DIR}/vhost.txt" 2>/dev/null
+    echo
+
+    # Stage 2: JavaScript URL Extraction
+    total_steps=4
+    current_step=0
+    message="Extracting JS URLs for $DOMAIN"
+    stdbuf -oL cat "$SUBDOMAINS_FILE" 2>/dev/null | waybackurls 2>/dev/null | grep -iE "\.js$" > "${OUTPUT_DIR}/wayback_urls.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    stdbuf -oL cat "$SUBDOMAINS_FILE" 2>/dev/null | awk '{print "https://"$0}' | hakrawler -d 2 -t 8 -u "$USER_AGENT" 2>/dev/null | grep -iE "\.js$" > "${OUTPUT_DIR}/hakrawler_urls.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    stdbuf -oL katana -list "$SUBDOMAINS_FILE" -jc -H "User-Agent: $USER_AGENT" 2>/dev/null | grep -iE "\.js$" > "${OUTPUT_DIR}/katana_urls.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    cat "${OUTPUT_DIR}"/*_urls.txt 2>/dev/null | sort -u > "$JS_URLS_FILE" 2>/dev/null
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    js_urls_count=$(wc -l < "$JS_URLS_FILE" 2>/dev/null || echo 0)
+    rm -f "${OUTPUT_DIR}"/*_urls.txt 2>/dev/null
+    echo
+
+    # Stage 3: Crawl Subdomains and Analyze URLs with gf
+    total_steps=8
+    current_step=0
+    message="Analyzing URLs for $DOMAIN"
+    stdbuf -oL cat "$SUBDOMAINS_FILE" 2>/dev/null | awk '{print "https://"$0}' | hakrawler -d 2 -t 8 -u "$USER_AGENT" 2>/dev/null > "${OUTPUT_DIR}/crawl.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    stdbuf -oL katana -list "$SUBDOMAINS_FILE" -c 10 -d 3 -H "User-Agent: $USER_AGENT" 2>/dev/null >> "${OUTPUT_DIR}/crawl.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    stdbuf -oL cat "$SUBDOMAINS_FILE" 2>/dev/null | waybackurls 2>/dev/null >> "${OUTPUT_DIR}/crawl.txt" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    cat "${OUTPUT_DIR}/crawl.txt" 2>/dev/null | sort -u | grep -vE "\.(css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|ico)$" > "${OUTPUT_DIR}/urls.txt" 2>/dev/null
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+
+    # Run gf for each pattern and collect counts
+    gf_patterns=("xss" "sqli" "ssrf" "ssti" "lfi")
+    declare -A gf_counts
+    for pattern in "${gf_patterns[@]}"; do
+        gf_counts[$pattern]=0
+        stdbuf -oL cat "${OUTPUT_DIR}/urls.txt" 2>/dev/null | gf "$pattern" 2>/dev/null > "${OUTPUT_DIR}/gf_${pattern}_raw.txt" 2>/dev/null &
+        pid=$!
+        animate_progress "$message" $total_steps $current_step $pid
+        wait $pid
+        ((current_step++))
+        draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+        # Remove duplicates based on parameters
+        remove_duplicate_urls "${OUTPUT_DIR}/gf_${pattern}_raw.txt" "${GF_DIR}/gf_${pattern}.txt"
+        if [[ -s "${GF_DIR}/gf_${pattern}.txt" ]]; then
+            gf_counts[$pattern]=$(wc -l < "${GF_DIR}/gf_${pattern}.txt" 2>/dev/null || echo 0)
+        else
+            > "${GF_DIR}/gf_${pattern}.txt"
+        fi
+    done
+
+    # Create vulnerable.txt with formatted output
+    total_vulns=0
+    > "$VULNERABLE_FILE"
+    for pattern in "${gf_patterns[@]}"; do
+        echo "${pattern}:" >> "$VULNERABLE_FILE"
+        if [[ -s "${GF_DIR}/gf_${pattern}.txt" ]]; then
+            cat "${GF_DIR}/gf_${pattern}.txt" >> "$VULNERABLE_FILE"
+            echo "" >> "$VULNERABLE_FILE"
+            ((total_vulns+=${gf_counts[$pattern]}))
+        else
+            echo "" >> "$VULNERABLE_FILE"
+        fi
+    done
+
+    draw_progress 10 100 "$message" 0
+    rm -f "${OUTPUT_DIR}/crawl.txt" "${OUTPUT_DIR}/urls.txt" "${OUTPUT_DIR}/gf_*_raw.txt" 2>/dev/null
+    echo
+
+    # Run Nuclei if flag is set
+    if [[ "$NUCLEI_FLAG" = true ]]; then
+        run_nuclei_scan "$OUTPUT_DIR" "$SUBDOMAINS_FILE"
+    fi
+
+    # Display results
+    echo -e "${GREEN}[*]Results for $DOMAIN:${NC}"
+    echo -e "${WHITE}[*]Subdomains: $SUBDOMAINS_FILE ($subdomains_count)${NC}"
+    echo -e "${WHITE}[*]JS URLs: $JS_URLS_FILE ($js_urls_count)${NC}"
+    if [[ $total_vulns -gt 0 ]]; then
+        echo -e "${WHITE}[*]Analysis: $VULNERABLE_FILE ($total_vulns)${NC}"
+    else
+        echo -e "${WHITE}  Analysis: No injection points found${NC}"
+    fi
+    for pattern in "${gf_patterns[@]}"; do
+        echo -e "${WHITE}  ${pattern} injection point (${gf_counts[$pattern]})${NC}"
+    done
+    if [[ "$NUCLEI_FLAG" = true && -s "$NUCLEI_FILE" ]]; then
+        nuclei_count=$(wc -l < "$NUCLEI_FILE" 2>/dev/null || echo 0)
+        echo -e "${WHITE}  Nuclei results: $NUCLEI_FILE ($nuclei_count)${NC}"
+    fi
+    echo -e "${WHITE}  Output directory: $OUTPUT_DIR/${NC}"
+    echo -e "${GREEN}Finished processing for domain: $DOMAIN${NC}"
+    echo
+}
+
+# Main execution
+main() {
+    display_logo
+
+    # Display targets
+    echo -e "${GREEN}[*]Targets:${NC}"
+    if [[ -n "$DOMAIN" ]]; then
+        echo -e "${WHITE}  - $DOMAIN${NC}"
+    elif [[ -n "$DOMAIN_LIST" ]]; then
+        echo -e "${WHITE}  - Domains from $DOMAIN_LIST:${NC}"
+        cat "$DOMAIN_LIST" | while read -r domain; do
+            echo -e "${WHITE}    - $domain${NC}"
+        done
+    fi
+    echo
+
+    # Check dependencies and initialize
+    check_dependencies
+    draw_progress 10 100 "Initializing" 0
+    echo
+
+    # Process domains
+    if [[ -n "$DOMAIN_LIST" ]]; then
+        if [[ ! -f "$DOMAIN_LIST" ]]; then
+            echo -e "${GREEN}Error: Domain list file $DOMAIN_LIST does not exist.${NC}"
+            exit 1
+        fi
+        while read -r domain; do
+            # Skip empty lines
+            [[ -z "$domain" ]] && continue
+            process_domain "$domain" "$VHOST_IP"
+        done < "$DOMAIN_LIST"
+    elif [[ -n "$DOMAIN" ]]; then
+        process_domain "$DOMAIN" "$VHOST_IP"
+    fi
+}
+
+# Parse arguments
+DOMAIN=""
+DOMAIN_LIST=""
+VHOST_IP=""
+NUCLEI_FLAG=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -d) DOMAIN="$2"; shift ;;
+        -l) DOMAIN_LIST="$2"; shift ;;
+        -vhost) VHOST_IP="$2"; shift ;;
+        -nuclei) NUCLEI_FLAG=true ;;
+        -h) display_help ;;
+        *) echo -e "${GREEN}Unknown option: $1${NC}"; display_help ;;
+    esac
+    shift
+done
+
+# Validate input
+if [[ -z "$DOMAIN" && -z "$DOMAIN_LIST" ]]; then
+    echo -e "${GREEN}Error: No domain or domain list specified. Use -d or -l, or -h for help.${NC}"
+    display_help
+fi
+if [[ -n "$DOMAIN" && -n "$DOMAIN_LIST" ]]; then
+    echo -e "${GREEN}Error: Cannot use both -d and -l options together. Use -h for help.${NC}"
+    display_help
+fi
+
+# Set paths
+WORDLIST="/home/mirage/1/tools/submaker/wordlist.txt"
+RESOLVERS="/home/mirage/1/tools/submaker/resolvers.txt"
+SUBDOMAINS_TXT="/home/mirage/1/tools/submaker/wordlist.txt"
+
+# Check wordlist, resolvers, and subdomains.txt
+if [[ ! -f "$WORDLIST" ]]; then
+    echo -e "${GREEN}Error: Wordlist not found at $WORDLIST.${NC}"
+    exit 1
+fi
+if [[ ! -f "$RESOLVERS" ]]; then
+    echo -e "${GREEN}Error: Resolvers not found at $RESOLVERS.${NC}"
+    exit 1
+fi
+if [[ ! -f "$SUBDOMAINS_TXT" ]]; then
+    echo -e "${GREEN}Error: Subdomains list not found at $SUBDOMAINS_TXT.${NC}"
+    exit 1
+fi
+
+main

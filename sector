@@ -489,7 +489,8 @@ process_domain() {
     done
 
     draw_progress 10 100 "$message" 0
-    rm -f "${OUTPUT_DIR}/crawl.txt" "${OUTPUT_DIR}/urls.txt" "${OUTPUT_DIR}/raw_gf_*" 2>/dev/null
+    find "${OUTPUT_DIR}" -name "raw_gf_*" -exec rm -f {} \;
+    rm -f "${OUTPUT_DIR}/crawl.txt" "${OUTPUT_DIR}/urls.txt"
     echo
 
     # Run Nuclei if flag is set

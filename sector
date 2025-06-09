@@ -14,6 +14,7 @@ BOLD_ORANGE='\033[1;33m'
 
 # User-Agent
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+USER_AGENT2="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.85 Safari/537.36"
 
 # Logo
 display_logo() {
@@ -22,19 +23,17 @@ display_logo() {
    ________  _____/ /_____  _____
   / ___/ _ \/ ___/ __/ __ \/ ___/
  (__  )  __/ /__/ /_/ /_/ / /    
-/____/\___/\___/\__/\____/_/     
-                by MNM           "
-echo -e "${BOLD_YELLOW} An advanced tool for asset discovery${NC}"
+/____/\___/\___/\__/\____/_/     "
+    echo -e "${BOLD_ORANGE}                  by MNM"
 
 }
 
 # Help menu
 display_help() {
-    display_logo
-    echo -e "${GREEN}
- Usage:${NC}"
+    echo -e "${BOLD_RED}
+Usage:${NC}"
     echo -e "${WHITE} sector [options]"
-    echo -e "${GREEN}
+    echo -e "${BOLD_RED}
 Options:${NC}"
     echo -e "${WHITE}  -d {domain}     
              Specify a single target domain (e.g., example.com)"
@@ -44,9 +43,11 @@ Options:${NC}"
              Specify an IP for virtual host scanning (e.g., http://5.5.5.5)"
     echo -e "${WHITE}  -nuclei         
              Smart scaning with private nuclei templates to find attack vectors"
+    echo -e "${WHITE}  -update
+              update the version of tools"         
     echo -e "${WHITE}  -h              
               Display this help menu"
-    echo -e "${GREEN}
+    echo -e "${BOLD_RED}
 Examples:${NC}"
     echo -e "${WHITE}  sector.sh -d example.com"
     echo -e "${WHITE}  sector.sh -d example.com -vhost http://5.5.5.5"
@@ -57,7 +58,7 @@ Examples:${NC}"
 
 # Check dependencies with customized checks
 check_dependencies() {
-    local tools=("subfinder" "assetfinder" "amass" "katana" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "nuclei")
+    local tools=("subfinder" "assetfinder" "amass" "katana" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "nuclei" "httpx")
     local missing_tools=()
 
     # Check each tool with appropriate method
@@ -331,6 +332,40 @@ run_nuclei_scan() {
     echo -e "${GREEN}Nuclei scan completed, results saved to $nuclei_output${NC}"
 }
 
+self_update() {
+    local REPO_URL="https://raw.githubusercontent.com/Nowafen/sector/main"
+    local VERSION_URL="${REPO_URL}/VERSION.txt"
+    local SCRIPT_URL="${REPO_URL}/sector"
+    local SCRIPT_NAME=$(basename "$0")
+    local ONLINE_VERSION=$(curl -fsS "$VERSION_URL" 2>/dev/null)
+
+    if [[ -z "$ONLINE_VERSION" ]]; then
+        echo -e "${GREEN}Error: Could not fetch version from $VERSION_URL${NC}"
+        exit 1
+    fi
+
+    display_logo
+    if [[ "$VERSION" == "$ONLINE_VERSION" ]]; then
+        echo -e "${GREEN}You are up to date! Current version: $VERSION${NC}"
+        exit 0
+    fi
+
+    echo -e "${BOLD_YELLOW}
+    
+New version $ONLINE_VERSION available! Updating from $VERSION...${NC}"
+    local TEMP_SCRIPT=$(mktemp)
+    if ! curl -fsS "$SCRIPT_URL" -o "$TEMP_SCRIPT" 2>/dev/null; then
+        echo -e "${GREEN}Error: Could not download new script from $SCRIPT_URL${NC}"
+        rm -f "$TEMP_SCRIPT"
+        exit 1
+    fi
+
+    chmod +x "$TEMP_SCRIPT"
+    mv "$TEMP_SCRIPT" "$SCRIPT_NAME"
+    echo -e "${GREEN}Update completed! Version $ONLINE_VERSION is ready.${NC}"
+    exit 0
+}
+
 # Process a single domain
 process_domain() {
     local DOMAIN=$1
@@ -341,6 +376,7 @@ process_domain() {
     GF_DIR="${OUTPUT_DIR}/gf"
     SUBDOMAINS_FILE="${OUTPUT_DIR}/subdomains"
     JS_URLS_FILE="${OUTPUT_DIR}/ALLjs.txt"
+    LIVE_JS_URLS_FILE="${OUTPUT_DIR}/livejs.txt"
     VULNERABLE_FILE="${OUTPUT_DIR}/vulnerable.txt"
     NUCLEI_FILE="${OUTPUT_DIR}/nuclei_results.txt"
 
@@ -428,6 +464,20 @@ process_domain() {
     rm -f "${OUTPUT_DIR}/wayback_urls.txt" "${OUTPUT_DIR}/hakrawler_urls.txt" "${OUTPUT_DIR}/katana_urls.txt" 2>/dev/null
     echo
 
+    # Stage 2.5: Filter Live JavaScript URLs with httpx
+    total_steps=1
+    current_step=0
+    message="Filtering live JS URLs for $DOMAIN"
+    stdbuf -oL cat "$JS_URLS_FILE" 2>/dev/null | httpx -mc 200 -H "User-Agent: $USER_AGENT" 2>/dev/null | tee "$LIVE_JS_URLS_FILE" 2>/dev/null &
+    pid=$!
+    animate_progress "$message" $total_steps $current_step $pid
+    wait $pid
+    ((current_step++))
+    draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
+    live_js_urls_count=$(wc -l < "$LIVE_JS_URLS_FILE" 2>/dev/null || echo 0)
+    rm -f "$JS_URLS_FILE" 2>/dev/null
+    echo
+
     # Stage 3: Crawl Subdomains and Analyze URLs with gf
     total_steps=9
     current_step=0
@@ -465,7 +515,6 @@ process_domain() {
         wait $pid
         ((current_step++))
         draw_progress 10 $((current_step * 100 / total_steps)) "$message" 0
-        # Remove duplicates based on parameters
         remove_duplicate_urls "${OUTPUT_DIR}/raw_gf_${pattern}.txt" "${GF_DIR}/gf_${pattern}.txt"
         if [[ -s "${GF_DIR}/gf_${pattern}.txt" ]]; then
             gf_counts[$pattern]=$(wc -l < "${GF_DIR}/gf_${pattern}.txt" 2>/dev/null || echo 0)
@@ -501,7 +550,7 @@ process_domain() {
     # Display results
     echo -e "${GREEN}[*]Results for $DOMAIN:${NC}"
     echo -e "${WHITE}[*]Subdomains: $SUBDOMAINS_FILE ($subdomains_count)${NC}"
-    echo -e "${WHITE}[*]JS URLs: $JS_URLS_FILE ($js_urls_count)${NC}"
+    echo -e "${WHITE}[*]JS URLs: $LIVE_JS_URLS_FILE ($live_js_urls_count)${NC}"
     if [[ $total_vulns -gt 0 ]]; then
         echo -e "${WHITE}[*]Analysis: $VULNERABLE_FILE ($total_vulns)${NC}"
     else
@@ -519,9 +568,12 @@ process_domain() {
     echo
 }
 
-# Main execution
 main() {
     display_logo
+    local ONLINE_VERSION=$(curl -fsS "https://raw.githubusercontent.com/Nowafen/sector/main/VERSION.txt" 2>/dev/null)
+    if [[ -n "$ONLINE_VERSION" && "$VERSION" != "$ONLINE_VERSION" ]]; then
+        echo -e "${BOLD_YELLOW}Warning: New version $ONLINE_VERSION available! Run './sector.sh -update' to update from $VERSION.${NC}"
+    fi
 
     # Display targets
     echo -e "${GREEN}[*]Targets:${NC}"
@@ -556,22 +608,25 @@ main() {
     fi
 }
 
-# Parse arguments
-DOMAIN=""
-DOMAIN_LIST=""
-VHOST_IP=""
-NUCLEI_FLAG=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -d) DOMAIN="$2"; shift ;;
         -l) DOMAIN_LIST="$2"; shift ;;
         -vhost) VHOST_IP="$2"; shift ;;
         -nuclei) NUCLEI_FLAG=true ;;
+        -update)
+            if [[ $# -gt 1 ]]; then
+                echo -e "${GREEN}Error: -update must be used alone. Use -h for help.${NC}"
+                exit 1
+            fi
+            self_update
+            ;;
         -h) display_help ;;
         *) echo -e "${GREEN}Unknown option: $1${NC}"; display_help ;;
     esac
     shift
 done
+
 
 # Validate input
 if [[ -z "$DOMAIN" && -z "$DOMAIN_LIST" ]]; then
@@ -587,6 +642,7 @@ fi
 WORDLIST="/home/mirage/1/tools/submaker/wordlist.txt"
 RESOLVERS="/home/mirage/1/tools/submaker/resolvers.txt"
 SUBDOMAINS_TXT="/home/mirage/1/tools/submaker/sublist.txt"
+VERSION="1.2"
 
 # Check wordlist, resolvers, and subdomains.txt
 if [[ ! -f "$WORDLIST" ]]; then
@@ -601,5 +657,7 @@ if [[ ! -f "$SUBDOMAINS_TXT" ]]; then
     echo -e "${GREEN}Error: Subdomains list not found at $SUBDOMAINS_TXT.${NC}"
     exit 1
 fi
+
+
 
 main

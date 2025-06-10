@@ -38,7 +38,7 @@ for tool in "${tools[@]}"; do
                 GO111MODULE=on go install -v github.com/OWASP/Amass/v3/...@latest > /dev/null 2>&1
                 ;;
             "katana")
-                GO111MODULE=on go install -v github.com/projectdiscovery/katana/cmd/katana@latest > /dev/null 2>&1
+                GO111MODULE=on go install github.com/projectdiscovery/katana/cmd/katana@latest > /dev/null 2>&1
                 ;;
             "hakrawler")
                 go install -v github.com/hakluke/hakrawler@latest > /dev/null 2>&1
@@ -56,7 +56,7 @@ for tool in "${tools[@]}"; do
                 go install -v github.com/ffuf/ffuf@latest > /dev/null 2>&1
                 ;;
             "nuclei")
-                GO111MODULE=on go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest > /dev/null 2>&1
+                GO111MODULE=on go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest > /dev/null 2>&1
                 ;;
             "httpx")
                 GO111MODULE=on go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest > /dev/null 2>&1

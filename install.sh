@@ -16,7 +16,7 @@ if ! ping -c 1 8.8.8.8 &>/dev/null; then
 fi
 
 # Test external access with fallback URLs
-test_urls=("https://google.com" "https://github.com" "https://goproxy.cn")
+test_urls=("https://google.com" "https://github.com" "https://goproxy.io")
 for url in "${test_urls[@]}"; do
     if curl -s --head "$url" | grep -q "200 OK"; then
         break
@@ -31,15 +31,15 @@ apt-get update -qq && apt-get install -y -qq snapd || { echo "Error: Failed to i
 snap install go --classic || { echo "Error: Failed to install Go."; exit 1; }
 
 # Update PATH
-echo 'export PATH=$PATH:/snap/bin:$HOME/.pdtm/go/bin' >> ~/.bashrc
-export PATH=$PATH:/snap/bin:$HOME/.pdtm/go/bin
+echo 'export PATH=$PATH:/snap/bin' >> ~/.bashrc
+export PATH=$PATH:/snap/bin
 
 # Verify and upgrade Go to 1.24.4 with multiple fallback methods
 current_go=$(go version | grep -oP 'go\d+\.\d+\.\d+' | cut -d'go' -f2)
 required_go="1.24.4"
 if [ "$(printf '%s\n' "$required_go" "$current_go" | sort -V | head -n1)" != "$required_go" ]; then
     echo -n "Upgrading Go to 1.24.4 "
-    methods=("default" "goproxy.cn" "goproxy.io" "manual_download")
+    methods=("default" "goproxy.io" "manual_download")
     for method in "${methods[@]}"; do
         case "$method" in
             "default")
@@ -47,16 +47,6 @@ if [ "$(printf '%s\n' "$required_go" "$current_go" | sort -V | head -n1)" != "$r
                     go1.24.4 env -w GOPATH=$HOME/go
                     export PATH=$HOME/go/bin:$PATH
                     break
-                fi
-                ;;
-            "goproxy.cn")
-                if ! which go1.24.4 &>/dev/null; then
-                    export GOPROXY=https://goproxy.cn,direct
-                    if go install golang.org/dl/go1.24.4@latest 2>/dev/null && go1.24.4 download 2>/dev/null; then
-                        go1.24.4 env -w GOPATH=$HOME/go
-                        export PATH=$HOME/go/bin:$PATH
-                        break
-                    fi
                 fi
                 ;;
             "goproxy.io")
@@ -90,42 +80,20 @@ if [ "$(printf '%s\n' "$required_go" "$current_go" | sort -V | head -n1)" != "$r
     fi
 fi
 
-# Install pdtm with multiple fallback methods
-echo -n "Installing tools: pdtm "
-if ! which pdtm &>/dev/null; then
-    proxies=("https://goproxy.cn,direct" "https://goproxy.io,direct" "direct")
-    for proxy in "${proxies[@]}"; do
-        export GOPROXY=$proxy
-        if go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest 2>/dev/null; then
-            break
-        fi
-    done
-    if ! which pdtm &>/dev/null; then
-        echo "Error: Failed to install pdtm."
-        exit 1
-    fi
-fi
-
 # Install tools only if not already installed
 tools=("subfinder" "katana" "nuclei" "httpx")
 other_tools=("assetfinder" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "amass")
 failed_tools=()
 
-echo -n "Installing ProjectDiscovery tools "
-for tool in "${tools[@]}"; do
+echo -n "Installing tools "
+for tool in "${tools[@]}" "${other_tools[@]}"; do
     if ! which "$tool" &>/dev/null; then
         echo -n "$tool "
-        if ! pdtm -i "$tool" 2>/dev/null; then
-            failed_tools+=("$tool")
-        fi
-    fi
-done
-
-# Install other tools only if not installed
-for tool in "${other_tools[@]}"; do
-    if ! which "$tool" &>/dev/null; then
-        echo -n "$tool "
+        export GOPROXY=https://goproxy.io,direct
         case "$tool" in
+            "subfinder"|"katana"|"nuclei"|"httpx")
+                go install -v "github.com/projectdiscovery/${tool}/cmd/${tool}@latest" 2>/dev/null || failed_tools+=("$tool")
+                ;;
             "assetfinder"|"hakrawler"|"waybackurls"|"gf"|"anew"|"ffuf")
                 go install -v "github.com/tomnomnom/${tool}@latest" 2>/dev/null || failed_tools+=("$tool")
                 ;;

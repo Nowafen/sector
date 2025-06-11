@@ -24,6 +24,7 @@ for tool in "${tools[@]}"; do
         echo "Installing $tool"
         case "$tool" in
             "subfinder"|"katana"|"nuclei"|"httpx")
+                go install -v "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest" >/dev/null || failed_tools+=("subfinder")
                 go install -v "github.com/projectdiscovery/${tool}/cmd/${tool}@latest" 2>/dev/null || failed_tools+=("$tool")
                 ;;
             "assetfinder"|"hakrawler"|"waybackurls"|"gf"|"anew"|"ffuf")

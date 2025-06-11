@@ -6,17 +6,6 @@ if ! command -v apt-get &>/dev/null; then
     exit 1
 fi
 
-# Test external access with fallback URLs
-test_urls=("https://google.com" "https://github.com" "https://goproxy.io")
-for url in "${test_urls[@]}"; do
-    if curl -s --head "$url" | grep -q "200 OK"; then
-        break
-    elif [ "$url" = "${test_urls[-1]}" ]; then
-        echo "Error: No access to external servers."
-        exit 1
-    fi
-done
-
 # Install snap and Go
 apt-get update -qq && apt-get install -y -qq snapd || { echo "Error: Failed to install snapd."; exit 1; }
 snap install go --classic || { echo "Error: Failed to install Go."; exit 1; }

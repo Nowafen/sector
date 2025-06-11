@@ -6,7 +6,10 @@ GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Function to display progress
+# Function to clear line and display progress
+clear_line() {
+    printf "\r\033[K"
+}
 progress() {
     local message="$1"
     local percent="$2"
@@ -14,7 +17,8 @@ progress() {
     local filled_length=$((percent * bar_length / 100))
     local bar=$(printf "%${filled_length}s" | tr ' ' '=')
     local empty=$(printf "%$((bar_length - filled_length))s")
-    printf "\r${GREEN}%s [%s%s] %d%%${NC}" "$message" "$bar" "$empty" "$percent"
+    clear_line
+    printf "${GREEN}%s [%s%s] %d%%${NC}" "$message" "$bar" "$empty" "$percent"
 }
 
 # Function to check internet connectivity
@@ -34,9 +38,11 @@ check_write_permissions() {
     fi
 }
 
-# Log function for debugging
-log() {
-    echo -e "${YELLOW}[DEBUG] $1${NC}"
+# Function to get latest Go version
+get_latest_go_version() {
+    local latest_version
+    latest_version=$(curl -s https://go.dev/dl/ | grep -oP 'go\d+\.\d+\.\d+\.linux-amd64\.tar\.gz' | head -n 1 | sed 's/\.linux-amd64\.tar\.gz//')
+    echo "${latest_version#go}"
 }
 
 # Check if system is Debian-based
@@ -56,12 +62,10 @@ check_write_permissions "$HOME"
 
 # Update package list and install basic dependencies
 echo -e "${GREEN}Updating package list and installing dependencies...${NC}"
-log "Running apt-get update"
 if ! apt-get update -qq; then
     echo -e "${RED}Error: Failed to update package list. Check your network or repository settings.${NC}"
     exit 1
 fi
-log "Installing curl, git, build-essential"
 if ! apt-get install -y -qq curl git build-essential; then
     echo -e "${RED}Error: Failed to install basic dependencies. Check apt-get logs.${NC}"
     exit 1
@@ -69,42 +73,27 @@ fi
 progress "Installing system dependencies" 10
 
 # Check and install/update Go
-required_go_version="1.22.4"
 if command -v go &>/dev/null; then
     current_go_version=$(go version | awk '{print $3}' | sed 's/go//')
-    log "Current Go version: $current_go_version"
-    if [ "$(printf '%s\n' "$required_go_version" "$current_go_version" | sort -V | head -n1)" != "$required_go_version" ]; then
-        echo -e "${YELLOW}Updating Go to version $required_go_version...${NC}"
-        log "Downloading Go $required_go_version"
-        if ! curl -fsSL "https://golang.org/dl/go${required_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
-            echo -e "${YELLOW}Trying alternative Go mirror...${NC}"
-            if ! curl -fsSL "https://go.dev/dl/go${required_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
+    echo -e "${GREEN}Go version $current_go_version is already installed.${NC}"
+    progress "Checking Go" 20
+else
+    echo -e "${GREEN}Installing latest Go version...${NC}"
+    latest_go_version=$(get_latest_go_version)
+    if [ -z "$latest_go_version" ]; then
+        echo -e "${RED}Error: Could not fetch latest Go version. Using fallback version 1.21.0...${NC}"
+        latest_go_version="1.21.0"
+    fi
+    if ! curl -fsSL "https://golang.org/dl/go${latest_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
+        echo -e "${YELLOW}Trying alternative Go mirror...${NC}"
+        if ! curl -fsSL "https://go.dev/dl/go${latest_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
+            echo -e "${RED}Error: Failed to download Go from all mirrors. Using archive mirror...${NC}"
+            if ! curl -fsSL "https://archive.org/download/go${latest_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
                 echo -e "${RED}Error: Failed to download Go from all mirrors.${NC}"
                 exit 1
             fi
         fi
-        log "Extracting Go"
-        if ! tar -C /usr/local -xzf go.tar.gz; then
-            echo -e "${RED}Error: Failed to extract Go. Check disk space or permissions.${NC}"
-            exit 1
-        fi
-        rm go.tar.gz
-        progress "Installing Go" 20
-    else
-        echo -e "${GREEN}Go version $current_go_version is already installed.${NC}"
-        progress "Checking Go" 20
     fi
-else
-    echo -e "${GREEN}Installing Go version $required_go_version...${NC}"
-    log "Downloading Go $required_go_version"
-    if ! curl -fsSL "https://golang.org/dl/go${required_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
-        echo -e "${YELLOW}Trying alternative Go mirror...${NC}"
-        if ! curl -fsSL "https://go.dev/dl/go${required_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
-            echo -e "${RED}Error: Failed to download Go from all mirrors.${NC}"
-            exit 1
-        fi
-    fi
-    log "Extracting Go"
     if ! tar -C /usr/local -xzf go.tar.gz; then
         echo -e "${RED}Error: Failed to extract Go. Check disk space or permissions.${NC}"
         exit 1
@@ -128,15 +117,13 @@ if ! which go &>/dev/null; then
         exit 1
     fi
 }
-log "Go installed at $(which go)"
-echo -e "${GREEN}Go is installed and configured.${NC}"
+echo -e "${GREEN}Go is installed and configured at $(which go).${NC}"
 progress "Configuring environment" 25
 
 # Set Go environment variables
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 mkdir -p "$GOPATH/bin"
-log "GOPATH set to $GOPATH"
 
 # Install required tools
 tools=("subfinder" "assetfinder" "amass" "katana" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "nuclei" "httpx")
@@ -154,7 +141,6 @@ for tool in "${tools[@]}"; do
 
     echo -e "${YELLOW}Installing $tool...${NC}"
     for attempt in {1..3}; do
-        log "Attempt $attempt to install $tool"
         case "$tool" in
             "subfinder")
                 GO111MODULE=on go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
@@ -211,7 +197,6 @@ done
 echo -e "${GREEN}Installing sector script...${NC}"
 check_write_permissions "/usr/local/bin"
 for attempt in {1..3}; do
-    log "Attempt $attempt to download sector"
     if curl -fsSL https://raw.githubusercontent.com/Nowafen/sector/main/sector -o /usr/local/bin/sector; then
         chmod +x /usr/local/bin/sector
         break

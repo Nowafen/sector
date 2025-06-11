@@ -8,138 +8,113 @@ NC='\033[0m'
 
 # Check if system is Debian-based
 if ! command -v apt-get &>/dev/null; then
-    echo -e "${RED}Error: This script supports Debian-based systems (e.g., Ubuntu). Please use a compatible OS.${NC}"
+    echo -e "${RED}Error: This script supports Debian-based systems (e.g., Ubuntu).${NC}"
     exit 1
 fi
 
 # Check internet connectivity
-echo -e "${GREEN}Checking internet connectivity...${NC}"
+echo -e "${GREEN}Checking internet...${NC}"
 if ! ping -c 1 8.8.8.8 &>/dev/null; then
-    echo -e "${RED}Error: No internet connection. Please check your network and try again.${NC}"
+    echo -e "${RED}Error: No internet connection.${NC}"
     exit 1
 fi
 
-# Update package list and install snap
-echo -e "${GREEN}Updating package list and installing snap...${NC}"
-if ! apt-get update -qq || ! apt-get install -y -qq snapd; then
-    echo -e "${RED}Error: Failed to update or install snapd. Check your network or permissions.${NC}"
-    exit 1
-fi
+# Update and install snap
+echo -e "${GREEN}Updating system and installing snap...${NC}"
+apt-get update -qq && apt-get install -y -qq snapd || { echo -e "${RED}Error: Failed to install snapd.${NC}"; exit 1; }
 
 # Install Go with snap
-echo -e "${GREEN}Installing Go with snap...${NC}"
-if ! snap install go --classic; then
-    echo -e "${RED}Error: Failed to install Go with snap. Ensure snap is properly configured.${NC}"
-    exit 1
-fi
+echo -e "${GREEN}Installing Go...${NC}"
+snap install go --classic || { echo -e "${RED}Error: Failed to install Go.${NC}"; exit 1; }
 
 # Add /snap/bin to PATH
-echo -e "${GREEN}Adding /snap/bin to PATH...${NC}"
-if ! grep -q "/snap/bin" ~/.bashrc; then
-    echo 'export PATH=$PATH:/snap/bin' >> ~/.bashrc
-fi
+echo -e "${GREEN}Configuring PATH...${NC}"
+echo 'export PATH=$PATH:/snap/bin' >> ~/.bashrc
 export PATH=$PATH:/snap/bin
 
-# Verify Go installation
-echo -e "${GREEN}Verifying Go installation...${NC}"
-if ! command -v go &>/dev/null; then
-    echo -e "${RED}Error: Go is not installed or not in PATH after snap installation.${NC}"
+# Verify Go
+echo -e "${GREEN}Verifying Go...${NC}"
+if ! go version &>/dev/null; then
+    echo -e "${RED}Error: Go installation failed.${NC}"
     exit 1
 fi
-go_version=$(go version)
-if [[ -z "$go_version" ]]; then
-    echo -e "${RED}Error: Go version check failed. Installation is invalid.${NC}"
-    exit 1
-fi
-echo -e "${GREEN}Go installed successfully: $go_version${NC}"
+echo -e "${GREEN}Go installed: $(go version)${NC}"
 
 # Install required tools
 tools=("subfinder" "assetfinder" "amass" "katana" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "nuclei" "httpx")
+failed_tools=()
 
-echo -e "${GREEN}Installing required tools...${NC}"
+echo -e "${GREEN}Installing tools:${NC}"
 for tool in "${tools[@]}"; do
+    echo -n "$tool "
     if which "$tool" &>/dev/null; then
-        echo -e "${GREEN}$tool is already installed at $(which $tool).${NC}"
         continue
     fi
-
-    echo -e "${YELLOW}Installing $tool...${NC}"
     case "$tool" in
-        "subfinder")
-            GO111MODULE=on go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+        "subfinder"|"katana"|"nuclei"|"httpx")
+            # Try Project Discovery tools with fallback mirror
+            if ! GO111MODULE=on go install -v "github.com/projectdiscovery/${tool}/cmd/${tool}@latest"; then
+                echo -e "${YELLOW}Trying mirror for $tool...${NC}"
+                if ! GO111MODULE=on go install -v "https://git.mirror.uncool.com/projectdiscovery/${tool}/cmd/${tool}@latest"; then
+                    echo -e "${RED}Failed: $tool${NC}"
+                    failed_tools+=("$tool")
+                fi
+            fi
             ;;
-        "assetfinder")
-            go install -v github.com/tomnomnom/assetfinder@latest
-            ;;
-        "amass")
-            GO111MODULE=on go install -v github.com/OWASP/Amass/v3/...@latest
-            ;;
-        "katana")
-            GO111MODULE=on go install github.com/projectdiscovery/katana/cmd/katana@latest
-            ;;
-        "hakrawler")
-            go install -v github.com/hakluke/hakrawler@latest
-            ;;
-        "waybackurls")
-            go install -v github.com/tomnomnom/waybackurls@latest
-            ;;
-        "gf")
-            go install -v github.com/tomnomnom/gf@latest
-            ;;
-        "anew")
-            go install -v github.com/tomnomnom/anew@latest
-            ;;
-        "ffuf")
-            go install -v github.com/ffuf/ffuf@latest
-            ;;
-        "nuclei")
-            GO111MODULE=on go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-            ;;
-        "httpx")
-            GO111MODULE=on go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+        "assetfinder"|"hakrawler"|"waybackurls"|"gf"|"anew"|"ffuf"|"amass")
+            if ! go install -v "github.com/tomnomnom/${tool}@latest" && [[ "$tool" == "amass" ]]; then
+                if ! GO111MODULE=on go install -v "github.com/OWASP/Amass/v3/...@latest"; then
+                    echo -e "${RED}Failed: $tool${NC}"
+                    failed_tools+=("$tool")
+                fi
+            elif ! go install -v "github.com/tomnomnom/${tool}@latest"; then
+                echo -e "${RED}Failed: $tool${NC}"
+                failed_tools+=("$tool")
+            fi
             ;;
     esac
-
-    if which "$tool" &>/dev/null; then
-        echo -e "${GREEN}$tool installed successfully at $(which $tool).${NC}"
-    else
-        echo -e "${RED}Error: Failed to install $tool. Check Go installation or network.${NC}"
-    fi
 done
+echo -e "\n${GREEN}Tool installation complete.${NC}"
 
-# Download and install sector script
-echo -e "${GREEN}Installing sector script...${NC}"
+# Install sector script
+echo -e "${GREEN}Installing sector...${NC}"
 if ! curl -fsSL https://raw.githubusercontent.com/Nowafen/sector/main/sector -o /usr/local/bin/sector; then
-    echo -e "${RED}Error: Failed to download sector script.${NC}"
+    echo -e "${RED}Error: Failed to download sector.${NC}"
     exit 1
 fi
 chmod +x /usr/local/bin/sector
-echo -e "${GREEN}Sector installed successfully at /usr/local/bin/sector${NC}"
+echo -e "${GREEN}Sector installed.${NC}"
 
-# Verify sector and tools
-echo -e "${GREEN}Verifying installations...${NC}"
-if [ -f /usr/local/bin/sector ] && sector -h &>/dev/null; then
-    echo -e "${GREEN}Sector supports -h switch and is functional.${NC}"
+# Verify sector -h switch
+if sector -h &>/dev/null; then
+    echo -e "${GREEN}Sector -h switch works.${NC}"
 else
-    echo -e "${YELLOW}Warning: Sector installed but -h switch may not work. Check script implementation.${NC}"
+    echo -e "${YELLOW}Warning: Sector -h switch failed.${NC}"
 fi
 
-all_tools_ok=true
+# Verify all tools
+echo -e "${GREEN}Verifying tools...${NC}"
+all_ok=true
 for tool in "${tools[@]}"; do
     if ! which "$tool" &>/dev/null; then
-        echo -e "${RED}Error: $tool is not installed or not in PATH.${NC}"
-        all_tools_ok=false
+        echo -e "${RED}Error: $tool not found.${NC}"
+        all_ok=false
     elif ! "$tool" --help &>/dev/null && ! "$tool" -h &>/dev/null; then
-        echo -e "${YELLOW}Warning: $tool may not function correctly.${NC}"
+        echo -e "${YELLOW}Warning: $tool may not work.${NC}"
     else
-        echo -e "${GREEN}$tool is installed and functional at $(which $tool).${NC}"
+        echo -e "${GREEN}$tool is functional.${NC}"
     fi
 done
 
-if [ "$all_tools_ok" = false ]; then
-    echo -e "${RED}Error: One or more tools failed verification.${NC}"
+if [ ${#failed_tools[@]} -gt 0 ]; then
+    echo -e "${RED}Failed tools: ${failed_tools[*]}${NC}"
+    all_ok=false
+fi
+
+if [ "$all_ok" = false ]; then
+    echo -e "${RED}Installation incomplete due to failures.${NC}"
     exit 1
 fi
 
-echo -e "\n${GREEN}Installation completed successfully. All tools and sector are ready to use.${NC}"
-echo -e "${YELLOW}Note: If tools are not accessible, run 'source ~/.bashrc' or restart your terminal.${NC}"
+echo -e "\n${GREEN}All installations successful. Ready to use.${NC}"
+echo -e "${YELLOW}Run 'source ~/.bashrc' if tools are not accessible.${NC}"

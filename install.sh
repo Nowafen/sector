@@ -34,6 +34,11 @@ check_write_permissions() {
     fi
 }
 
+# Log function for debugging
+log() {
+    echo -e "${YELLOW}[DEBUG] $1${NC}"
+}
+
 # Check if system is Debian-based
 if ! command -v apt-get &>/dev/null; then
     echo -e "${RED}Error: This script supports Debian-based systems (e.g., Ubuntu). Please use a compatible OS.${NC}"
@@ -51,10 +56,12 @@ check_write_permissions "$HOME"
 
 # Update package list and install basic dependencies
 echo -e "${GREEN}Updating package list and installing dependencies...${NC}"
+log "Running apt-get update"
 if ! apt-get update -qq; then
     echo -e "${RED}Error: Failed to update package list. Check your network or repository settings.${NC}"
     exit 1
 fi
+log "Installing curl, git, build-essential"
 if ! apt-get install -y -qq curl git build-essential; then
     echo -e "${RED}Error: Failed to install basic dependencies. Check apt-get logs.${NC}"
     exit 1
@@ -65,15 +72,18 @@ progress "Installing system dependencies" 10
 required_go_version="1.22.4"
 if command -v go &>/dev/null; then
     current_go_version=$(go version | awk '{print $3}' | sed 's/go//')
+    log "Current Go version: $current_go_version"
     if [ "$(printf '%s\n' "$required_go_version" "$current_go_version" | sort -V | head -n1)" != "$required_go_version" ]; then
         echo -e "${YELLOW}Updating Go to version $required_go_version...${NC}"
+        log "Downloading Go $required_go_version"
         if ! curl -fsSL "https://golang.org/dl/go${required_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
-            echo -e "${RED}Error: Failed to download Go. Trying alternative mirror...${NC}"
+            echo -e "${YELLOW}Trying alternative Go mirror...${NC}"
             if ! curl -fsSL "https://go.dev/dl/go${required_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
                 echo -e "${RED}Error: Failed to download Go from all mirrors.${NC}"
                 exit 1
             fi
         fi
+        log "Extracting Go"
         if ! tar -C /usr/local -xzf go.tar.gz; then
             echo -e "${RED}Error: Failed to extract Go. Check disk space or permissions.${NC}"
             exit 1
@@ -86,13 +96,15 @@ if command -v go &>/dev/null; then
     fi
 else
     echo -e "${GREEN}Installing Go version $required_go_version...${NC}"
+    log "Downloading Go $required_go_version"
     if ! curl -fsSL "https://golang.org/dl/go${required_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
-        echo -e "${RED}Error: Failed to download Go. Trying alternative mirror...${NC}"
+        echo -e "${YELLOW}Trying alternative Go mirror...${NC}"
         if ! curl -fsSL "https://go.dev/dl/go${required_go_version}.linux-amd64.tar.gz" -o go.tar.gz; then
             echo -e "${RED}Error: Failed to download Go from all mirrors.${NC}"
             exit 1
         fi
     fi
+    log "Extracting Go"
     if ! tar -C /usr/local -xzf go.tar.gz; then
         echo -e "${RED}Error: Failed to extract Go. Check disk space or permissions.${NC}"
         exit 1
@@ -116,6 +128,7 @@ if ! which go &>/dev/null; then
         exit 1
     fi
 }
+log "Go installed at $(which go)"
 echo -e "${GREEN}Go is installed and configured.${NC}"
 progress "Configuring environment" 25
 
@@ -123,6 +136,7 @@ progress "Configuring environment" 25
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 mkdir -p "$GOPATH/bin"
+log "GOPATH set to $GOPATH"
 
 # Install required tools
 tools=("subfinder" "assetfinder" "amass" "katana" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "nuclei" "httpx")
@@ -139,7 +153,8 @@ for tool in "${tools[@]}"; do
     fi
 
     echo -e "${YELLOW}Installing $tool...${NC}"
-    for attempt in {1..2}; do
+    for attempt in {1..3}; do
+        log "Attempt $attempt to install $tool"
         case "$tool" in
             "subfinder")
                 GO111MODULE=on go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
@@ -182,7 +197,7 @@ for tool in "${tools[@]}"; do
             progress "Installing tools" $((25 + installed * 60 / total_tools))
             break
         else
-            if [ $attempt -eq 2 ]; then
+            if [ $attempt -eq 3 ]; then
                 echo -e "${RED}Error: Failed to install $tool after $attempt attempts.${NC}"
                 exit 1
             fi
@@ -195,12 +210,13 @@ done
 # Download and install sector script
 echo -e "${GREEN}Installing sector script...${NC}"
 check_write_permissions "/usr/local/bin"
-for attempt in {1..2}; do
+for attempt in {1..3}; do
+    log "Attempt $attempt to download sector"
     if curl -fsSL https://raw.githubusercontent.com/Nowafen/sector/main/sector -o /usr/local/bin/sector; then
         chmod +x /usr/local/bin/sector
         break
     else
-        if [ $attempt -eq 2 ]; then
+        if [ $attempt -eq 3 ]; then
             echo -e "${RED}Error: Failed to download sector after $attempt attempts.${NC}"
             exit 1
         fi
@@ -233,7 +249,7 @@ for tool in "${tools[@]}"; do
     elif ! "$tool" --help &>/dev/null && ! "$tool" -h &>/dev/null; then
         echo -e "${YELLOW}Warning: $tool is installed but may not function correctly.${NC}"
     else
-        echo -e "${GREEN}$tool is installed and functional.${NC}"
+        echo -e "${GREEN}$tool is installed and functional at $(which $tool).${NC}"
     fi
 done
 

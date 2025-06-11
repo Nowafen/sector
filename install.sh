@@ -1,120 +1,77 @@
 #!/bin/bash
 
-# Colors for output
-RED='\033[1;31m'
-GREEN='\033[1;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
 # Check if system is Debian-based
 if ! command -v apt-get &>/dev/null; then
-    echo -e "${RED}Error: This script supports Debian-based systems (e.g., Ubuntu).${NC}"
+    echo "Error: Requires Debian-based system (e.g., Ubuntu)."
     exit 1
 fi
 
-# Check internet connectivity
-echo -e "${GREEN}Checking internet...${NC}"
+# Check internet
 if ! ping -c 1 8.8.8.8 &>/dev/null; then
-    echo -e "${RED}Error: No internet connection.${NC}"
+    echo "Error: No internet connection."
     exit 1
 fi
 
-# Update and install snap
-echo -e "${GREEN}Updating system and installing snap...${NC}"
-apt-get update -qq && apt-get install -y -qq snapd || { echo -e "${RED}Error: Failed to install snapd.${NC}"; exit 1; }
+# Install snap and Go
+apt-get update -qq && apt-get install -y -qq snapd || { echo "Error: Failed to install snapd."; exit 1; }
+snap install go --classic || { echo "Error: Failed to install Go."; exit 1; }
 
-# Install Go with snap
-echo -e "${GREEN}Installing Go...${NC}"
-snap install go --classic || { echo -e "${RED}Error: Failed to install Go.${NC}"; exit 1; }
-
-# Add /snap/bin to PATH
-echo -e "${GREEN}Configuring PATH...${NC}"
-echo 'export PATH=$PATH:/snap/bin' >> ~/.bashrc
-export PATH=$PATH:/snap/bin
+# Update PATH
+echo 'export PATH=$PATH:/snap/bin:$HOME/.pdtm/go/bin' >> ~/.bashrc
+export PATH=$PATH:/snap/bin:$HOME/.pdtm/go/bin
 
 # Verify Go
-echo -e "${GREEN}Verifying Go...${NC}"
 if ! go version &>/dev/null; then
-    echo -e "${RED}Error: Go installation failed.${NC}"
+    echo "Error: Go installation failed."
     exit 1
 fi
-echo -e "${GREEN}Go installed: $(go version)${NC}"
 
-# Install required tools
-tools=("subfinder" "assetfinder" "amass" "katana" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "nuclei" "httpx")
+# Install pdtm
+echo -n "Installing tools: pdtm "
+go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest 2>/dev/null || { echo "Error: Failed to install pdtm."; exit 1; }
+
+# Install ProjectDiscovery tools using pdtm
+tools=("subfinder" "katana" "nuclei" "httpx")
+other_tools=("assetfinder" "hakrawler" "waybackurls" "gf" "anew" "ffuf" "amass")
 failed_tools=()
 
-echo -e "${GREEN}Installing tools:${NC}"
-for tool in "${tools[@]}"; do
+echo -n "Installing ProjectDiscovery tools "
+pdtm -i "${tools[*]}" 2>/dev/null || failed_tools+=("${tools[@]}")
+
+# Install other tools
+for tool in "${other_tools[@]}"; do
     echo -n "$tool "
     if which "$tool" &>/dev/null; then
         continue
     fi
     case "$tool" in
-        "subfinder"|"katana"|"nuclei"|"httpx")
-            # Try Project Discovery tools with fallback mirror
-            if ! GO111MODULE=on go install -v "github.com/projectdiscovery/${tool}/cmd/${tool}@latest"; then
-                echo -e "${YELLOW}Trying mirror for $tool...${NC}"
-                if ! GO111MODULE=on go install -v "https://git.mirror.uncool.com/projectdiscovery/${tool}/cmd/${tool}@latest"; then
-                    echo -e "${RED}Failed: $tool${NC}"
-                    failed_tools+=("$tool")
-                fi
-            fi
+        "assetfinder"|"hakrawler"|"waybackurls"|"gf"|"anew"|"ffuf")
+            go install -v "github.com/tomnomnom/${tool}@latest" 2>/dev/null || failed_tools+=("$tool")
             ;;
-        "assetfinder"|"hakrawler"|"waybackurls"|"gf"|"anew"|"ffuf"|"amass")
-            if ! go install -v "github.com/tomnomnom/${tool}@latest" && [[ "$tool" == "amass" ]]; then
-                if ! GO111MODULE=on go install -v "github.com/OWASP/Amass/v3/...@latest"; then
-                    echo -e "${RED}Failed: $tool${NC}"
-                    failed_tools+=("$tool")
-                fi
-            elif ! go install -v "github.com/tomnomnom/${tool}@latest"; then
-                echo -e "${RED}Failed: $tool${NC}"
-                failed_tools+=("$tool")
-            fi
+        "amass")
+            go install -v github.com/owasp-amass/amass/v4/...@master 2>/dev/null || failed_tools+=("$tool")
             ;;
     esac
 done
-echo -e "\n${GREEN}Tool installation complete.${NC}"
-
-# Install sector script
-echo -e "${GREEN}Installing sector...${NC}"
-if ! curl -fsSL https://raw.githubusercontent.com/Nowafen/sector/main/sector -o /usr/local/bin/sector; then
-    echo -e "${RED}Error: Failed to download sector.${NC}"
-    exit 1
-fi
-chmod +x /usr/local/bin/sector
-echo -e "${GREEN}Sector installed.${NC}"
-
-# Verify sector -h switch
-if sector -h &>/dev/null; then
-    echo -e "${GREEN}Sector -h switch works.${NC}"
-else
-    echo -e "${YELLOW}Warning: Sector -h switch failed.${NC}"
-fi
+echo
 
 # Verify all tools
-echo -e "${GREEN}Verifying tools...${NC}"
 all_ok=true
-for tool in "${tools[@]}"; do
+all_tools=("${tools[@]}" "${other_tools[@]}")
+for tool in "${all_tools[@]}"; do
     if ! which "$tool" &>/dev/null; then
-        echo -e "${RED}Error: $tool not found.${NC}"
+        echo "Error: $tool not found."
         all_ok=false
-    elif ! "$tool" --help &>/dev/null && ! "$tool" -h &>/dev/null; then
-        echo -e "${YELLOW}Warning: $tool may not work.${NC}"
-    else
-        echo -e "${GREEN}$tool is functional.${NC}"
     fi
 done
 
 if [ ${#failed_tools[@]} -gt 0 ]; then
-    echo -e "${RED}Failed tools: ${failed_tools[*]}${NC}"
-    all_ok=false
-fi
-
-if [ "$all_ok" = false ]; then
-    echo -e "${RED}Installation incomplete due to failures.${NC}"
+    echo "Failed tools: ${failed_tools[*]}"
     exit 1
 fi
 
-echo -e "\n${GREEN}All installations successful. Ready to use.${NC}"
-echo -e "${YELLOW}Run 'source ~/.bashrc' if tools are not accessible.${NC}"
+# Install sector only if all tools are installed
+curl -fsSL https://raw.githubusercontent.com/Nowafen/sector/main/sector -o /usr/local/bin/sector || { echo "Error: Failed to download sector."; exit 1; }
+chmod +x /usr/local/bin/sector
+
+echo "Installation complete. Run 'source ~/.bashrc' if tools are not accessible."

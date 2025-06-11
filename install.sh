@@ -6,15 +6,6 @@ if ! command -v apt-get &>/dev/null; then
     exit 1
 fi
 
-# Check internet connectivity with multiple methods
-echo -n "Checking internet "
-if ! ping -c 1 8.8.8.8 &>/dev/null; then
-    if ! ping -c 1 1.1.1.1 &>/dev/null; then
-        echo "Error: No internet connection."
-        exit 1
-    fi
-fi
-
 # Test external access with fallback URLs
 test_urls=("https://google.com" "https://github.com" "https://goproxy.io")
 for url in "${test_urls[@]}"; do

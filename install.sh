@@ -20,15 +20,25 @@ snap install go --classic || { echo "Error: Failed to install Go."; exit 1; }
 echo 'export PATH=$PATH:/snap/bin:$HOME/.pdtm/go/bin' >> ~/.bashrc
 export PATH=$PATH:/snap/bin:$HOME/.pdtm/go/bin
 
-# Verify Go
-if ! go version &>/dev/null; then
-    echo "Error: Go installation failed."
-    exit 1
+# Verify and upgrade Go to 1.24.4 if needed
+current_go=$(go version | grep -oP 'go\d+\.\d+\.\d+' | cut -d'go' -f2)
+required_go="1.24.4"
+if [ "$(printf '%s\n' "$required_go" "$current_go" | sort -V | head -n1)" != "$required_go" ]; then
+    echo -n "Upgrading Go to 1.24.4 "
+    if ! go install golang.org/dl/go1.24.4@latest 2>/dev/null || ! go1.24.4 download 2>/dev/null; then
+        export GOPROXY=https://goproxy.cn,direct
+        go install golang.org/dl/go1.24.4@latest 2>/dev/null && go1.24.4 download 2>/dev/null || { echo "Error: Failed to upgrade Go."; exit 1; }
+    fi
+    go1.24.4 env -w GOPATH=$HOME/go
+    export PATH=$HOME/go/bin:$PATH
 fi
 
 # Install pdtm
 echo -n "Installing tools: pdtm "
-go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest 2>/dev/null || { echo "Error: Failed to install pdtm."; exit 1; }
+if ! go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest 2>/dev/null; then
+    export GOPROXY=https://goproxy.cn,direct
+    go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest 2>/dev/null || { echo "Error: Failed to install pdtm."; exit 1; }
+fi
 
 # Install ProjectDiscovery tools using pdtm
 tools=("subfinder" "katana" "nuclei" "httpx")

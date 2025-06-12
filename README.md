@@ -1,7 +1,7 @@
 ### installation
 ```
-curl -fsSL https://raw.githubusercontent.com/Nowafen/sector/main/install.sh -o install.sh
-chmod +x *.sh
+git clone https://github.com/Nowafen/sector.git
+./sector -h
 ```
 ```
 ./install.sh ; sector -h

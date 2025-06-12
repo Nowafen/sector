@@ -27,29 +27,28 @@ export PATH=$PATH:/snap/bin
 export GOPROXY=https://goproxy.io,direct
 echo "Setting GOPROXY to https://goproxy.io,direct"
 
-# Define tools and their installation commands
+# Define tools and their installation commands (excluding amass)
 declare -A tools=(
-    ["nuclei"]="go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
-    ["subfinder"]="go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
-    ["httpx"]="go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
-    ["assetfinder"]="go install -v github.com/tomnomnom/assetfinder@latest"
+    ["nuclei"]="go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+    ["subfinder"]="go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+    ["httpx"]="go install github.com/projectdiscovery/httpx/cmd/httpx@latest"
+    ["assetfinder"]="go install github.com/tomnomnom/assetfinder@latest"
     ["hakrawler"]="go install github.com/hakluke/hakrawler@latest"
-    ["katana"]="go install -v github.com/projectdiscovery/katana/cmd/katana@latest"
-    ["amass"]="go install -v github.com/owasp-amass/amass/v4/...@master"
+    ["katana"]="go install github.com/projectdiscovery/katana/cmd/katana@latest"
     ["ffuf"]="go install github.com/ffuf/ffuf/v2@latest"
     ["gf"]="go install github.com/tomnomnom/gf@latest"
     ["waybackurls"]="go install github.com/tomnomnom/waybackurls@latest"
     ["anew"]="go install github.com/tomnomnom/anew@latest"
 )
 
-# Install and test each tool individually
+# Install and test each tool individually (excluding amass)
 for tool in "${!tools[@]}"; do
     if which "$tool" &>/dev/null; then
         print_success "$tool is already installed"
         installed_tools+=("$tool")
     else
         echo "Installing $tool..."
-        if ${tools[$tool]} 2> >(tee /tmp/install_error.log); then
+        if ${tools[$tool]} >/dev/null 2> >(tee /tmp/install_error.log); then
             if which "$tool" &>/dev/null; then
                 print_success "$tool installed successfully"
                 print_success "$tool is available"
@@ -64,6 +63,28 @@ for tool in "${!tools[@]}"; do
         fi
     fi
 done
+
+# Install amass separately
+if which amass &>/dev/null; then
+    print_success "amass is already installed"
+    installed_tools+=("amass")
+else
+    echo "Installing amass..."
+    temp_dir=$(mktemp -d)
+    if git clone https://github.com/OWASP/Amass.git "$temp_dir" >/dev/null 2> >(tee /tmp/install_error.log) && \
+       cd "$temp_dir" && \
+       go build ./cmd/amass >/dev/null 2>>/tmp/install_error.log && \
+       sudo mv amass /usr/local/bin/ >/dev/null 2>>/tmp/install_error.log && \
+       amass -version >/dev/null 2>>/tmp/install_error.log; then
+        print_success "amass installed successfully"
+        print_success "amass is available"
+        installed_tools+=("amass")
+    else
+        print_error "amass installation failed: $(cat /tmp/install_error.log)"
+        failed_tools+=("amass")
+    fi
+    rm -rf "$temp_dir"
+fi
 
 # Print summary
 if [ ${#failed_tools[@]} -eq 0 ]; then

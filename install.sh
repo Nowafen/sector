@@ -70,12 +70,7 @@ if which amass &>/dev/null; then
     installed_tools+=("amass")
 else
     echo "Installing amass..."
-    temp_dir=$(mktemp -d)
-    if git clone https://github.com/owasp-amass/amass.git "$temp_dir" >/dev/null 2> >(tee /tmp/install_error.log) && \
-       cd "$temp_dir" && \
-       go build ./cmd/amass >/dev/null 2>>/tmp/install_error.log && \
-       sudo mv amass /usr/local/bin/ >/dev/null 2>>/tmp/install_error.log && \
-       amass -version >/dev/null 2>>/tmp/install_error.log; then
+    if snap install amass >/dev/null 2> >(tee /tmp/install_error.log) && amass -h >/dev/null 2>>/tmp/install_error.log; then
         print_success "amass installed successfully"
         print_success "amass is available"
         installed_tools+=("amass")
@@ -83,7 +78,6 @@ else
         print_error "amass installation failed: $(cat /tmp/install_error.log)"
         failed_tools+=("amass")
     fi
-    rm -rf "$temp_dir"
 fi
 
 # Print summary

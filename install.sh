@@ -71,7 +71,7 @@ if which amass &>/dev/null; then
 else
     echo "Installing amass..."
     temp_dir=$(mktemp -d)
-    if git clone https://github.com/OWASP/Amass.git "$temp_dir" >/dev/null 2> >(tee /tmp/install_error.log) && \
+    if git clone https://github.com/owasp-amass/amass.git "$temp_dir" >/dev/null 2> >(tee /tmp/install_error.log) && \
        cd "$temp_dir" && \
        go build ./cmd/amass >/dev/null 2>>/tmp/install_error.log && \
        sudo mv amass /usr/local/bin/ >/dev/null 2>>/tmp/install_error.log && \

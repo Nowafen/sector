@@ -48,8 +48,8 @@ Usage:
 
 Options:
   
-    -d, --domain
-    {domain}  Specify a single target domain (e.g., example.com)
+    -d, --domain {domain}  
+    Specify a single target domain (e.g., example.com)
   
     -l, --list {file}  
     Specify a file containing a list of domains to scan (e.g., file-domains.txt)
@@ -69,7 +69,7 @@ Options:
     -h, --help 
     Display this help menu
 
-    Version : 1.2.3
+    Version : 
 
 Examples:
   sector -d google.com

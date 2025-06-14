@@ -1,5 +1,6 @@
 # Sector
 
+(https://google.com)[link]
 **Sector** is an automation tool for reconnaissance and vulnerability assessment of web targets. It streamlines the discovery of subdomains, JavaScript assets, virtual hosts, and potential security issues, leveraging a wide range of well-established utilities behind the scenes. Sector emphasizes efficiency, configurability, and actionable output for both single and bulk domain analysis.
 
 ---

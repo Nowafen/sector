@@ -1,6 +1,5 @@
 # Sector
 
-
 **Sector** is an automation tool for reconnaissance and vulnerability assessment of web targets. It streamlines the discovery of subdomains, JavaScript assets, virtual hosts, and potential security issues, leveraging a wide range of well-established utilities behind the scenes. Sector emphasizes efficiency, configurability, and actionable output for both single and bulk domain analysis.
 
 ---
@@ -74,8 +73,9 @@ Options:
 
 Examples:
   sector -d google.com
-  sector -d google.com -vhost http://1.8.55.55  -nuclei
+  sector -d google.com -vhost http://1.8.55.55  --nuclei
   sector -l file-domains.txt -nc
 ```
+
 ###### Contact 
 [🔗 Telegram Channel](https://t.me/Tellmejs)

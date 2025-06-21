@@ -1,8 +1,9 @@
-#### Sector is an automation tool for reconnaissance and vulnerability assessment of web targets. It streamlines the discovery of subdomains, JavaScript assets, virtual hosts, and potential security issues, leveraging a wide range of well-established utilities behind the scenes. Sector emphasizes efficiency, configurability, and actionable output for both single and bulk domain analysis.
+#### Sector is 
+a high-performance attack surface mapping and vulnerability assessment tool for modern web targets. It automates reconnaissance workflows with precision, covering subdomains, JavaScript assets, virtual hosts, and potential weaknesses using a curated stack of battle-tested utilities. Sector is built for speed, flexibility, and delivering clear, actionable results — whether scanning a single domain or at scale.
 
 ---
 
-## 🔍 Features
+## Features
 
 - **Subdomain Discovery:** Gathers subdomains from multiple reliable sources.
 - **JavaScript Asset Collection:** Extracts JavaScript URLs for potential analysis or fuzzing.

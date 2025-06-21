@@ -1,7 +1,12 @@
 ### Sector is 
-###### A high-performance attack surface mapping and vulnerability assessment tool for modern web targets. It automates reconnaissance workflows with precision, covering subdomains, JavaScript assets, virtual hosts, and potential weaknesses using a curated stack of battle-tested utilities. Sector is built for speed, flexibility, and delivering clear, actionable results — whether scanning a single domain or at scale.
+###### A high-performance attack surface mapping and vulnerability assessment tool for modern web targets. It automates reconnaissance workflows with precision, covering subdomains, JavaScript assets, virtual hosts, and potential weaknesses using a curated stack of battle-tested utilities. Sector is built for speed, flexibility, and delivering clear, actionable results; whether scanning a single domain or at scale.
 
 ---
+## Summray
+* [Features](#Features)
+* [Installation](#Installation)
+* [How worked?](#Usage)
+
 
 #### Features
 

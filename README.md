@@ -45,7 +45,7 @@ These include external utilities used for domain enumeration, content discovery,
 ### Usage
 
 ```
-./ sector -h
+./sector -h
 
 Usage:
  sector [options]

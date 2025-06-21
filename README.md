@@ -1,22 +1,22 @@
-#### Sector is 
-a high-performance attack surface mapping and vulnerability assessment tool for modern web targets. It automates reconnaissance workflows with precision, covering subdomains, JavaScript assets, virtual hosts, and potential weaknesses using a curated stack of battle-tested utilities. Sector is built for speed, flexibility, and delivering clear, actionable results — whether scanning a single domain or at scale.
+### Sector is 
+###### A high-performance attack surface mapping and vulnerability assessment tool for modern web targets. It automates reconnaissance workflows with precision, covering subdomains, JavaScript assets, virtual hosts, and potential weaknesses using a curated stack of battle-tested utilities. Sector is built for speed, flexibility, and delivering clear, actionable results — whether scanning a single domain or at scale.
 
 ---
 
-## Features
+#### Features
 
-- **Subdomain Discovery:** Gathers subdomains from multiple reliable sources.
-- **JavaScript Asset Collection:** Extracts JavaScript URLs for potential analysis or fuzzing.
-- **Virtual Host Scanning:** Supports mapping domains to specific IPs to uncover hidden hosts.
-- **Smart JS Fuzzing:** Attempts to locate undiscovered JavaScript paths via intelligent fuzzing.
-- **Vulnerability Detection:** Highlights suspicious patterns and integrates with advanced scanning engines.
-- **Progress Feedback:** Displays interactive progress animations during operation.
-- **Clean Output:** Ensures deduplication and structured artifact generation.
-- **Self-Updating:** Can automatically update itself to the latest available version.
+- ###### Subdomain Discovery: Gathers subdomains from multiple reliable sources.
+- ###### JavaScript Asset Collection: Extracts JavaScript URLs for potential analysis or fuzzing.
+- ###### Virtual Host Scanning: Supports mapping domains to specific IPs to uncover hidden hosts.
+- ###### Smart JS Fuzzing: Attempts to locate undiscovered JavaScript paths via intelligent fuzzing.
+- ###### Vulnerability Detection: Highlights suspicious patterns and integrates with advanced scanning engines.
+- ###### Progress Feedback: Displays interactive progress animations during operation.
+- ###### Clean Output: Ensures deduplication and structured artifact generation.
+- ###### Self-Updating: Can automatically update itself to the latest available version.
 
 ---
 
-## ⚙️ Installation
+### Installation
 
 1. Clone the repository:
 
@@ -37,7 +37,7 @@ These include external utilities used for domain enumeration, content discovery,
 
 ---
 
-## 🚀 Usage
+### Usage
 
 ```
 ./ sector -h

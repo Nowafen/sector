@@ -40,39 +40,40 @@ These include external utilities used for domain enumeration, content discovery,
 ## 🚀 Usage
 
 ```
-./sector --help
+./ sector -h
 
 Usage:
  sector [options]
 
 Options:
   
-    -d, --domain {domain}  
-    Specify a single target domain (e.g., example.com)
+    -d, --domain
+    {domain}  Specify a single target domain (e.g., example.com)
   
-    -l, --list {file}  
+    -l, --list {file}
     Specify a file containing a list of domains to scan (e.g., file-domains.txt)
   
-    -vhost {ip}  
+    -vhost {ip}
     Specify an IP for virtual host scanning (e.g., http://5.5.5.5)
   
     -nc, --nuclei
     Smart scaning with private nuclei templates to find attack vectors
   
-    -sjf, --smart-js-fuzzer  
+    -sjf, --smart-js-fuzzer
     Smart fuzzing of JS file paths using ffuf to discover additional JS files
   
-    -up, --update  
+    -up, --update
     update the version of tools
   
-    -h, --help 
+    -h, --help
     Display this help menu
 
-    Version : 
+
+    Version : 1.2.3
 
 Examples:
   sector -d google.com
-  sector -d google.com -vhost http://1.8.55.55  --nuclei
+  sector -d google.com -vhost http://85.85.1.1  -nuclei
   sector -l file-domains.txt -nc
 ```
 

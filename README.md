@@ -25,7 +25,7 @@
 
 1. Clone the repository:
 
-    ```bash
+    ```
     git clone https://github.com/Nowafen/sector.git
     cd sector
     chmod +x sector

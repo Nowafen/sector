@@ -43,7 +43,10 @@ These include external utilities used for domain enumeration, content discovery,
 ---
 
 ### Usage
-
+<details>
+  <summary>Expand full help flags
+  </summary>
+    
 ```
 ./sector -h
 
@@ -81,6 +84,7 @@ Examples:
   sector -d google.com -vhost http://85.85.1.1  -nuclei
   sector -l file-domains.txt -nc
 ```
+</details>
 
 ##### Contact 
 [🔗 Telegram Channel](https://t.me/Tellmejs)

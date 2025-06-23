@@ -31,7 +31,7 @@ echo "Setting GOPROXY to https://goproxy.io,direct"
 declare -A tools=(
     ["nuclei"]="go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
     ["subfinder"]="go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
-    ["httpx"]="go install github.com/projectdiscovery/httpx/cmd/httpx@latest"
+    ["httpx"]="go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
     ["assetfinder"]="go install github.com/tomnomnom/assetfinder@latest"
     ["hakrawler"]="go install github.com/hakluke/hakrawler@latest"
     ["katana"]="go install github.com/projectdiscovery/katana/cmd/katana@latest"

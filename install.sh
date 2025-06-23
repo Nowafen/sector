@@ -39,6 +39,7 @@ declare -A tools=(
     ["gf"]="go install github.com/tomnomnom/gf@latest"
     ["waybackurls"]="go install github.com/tomnomnom/waybackurls@latest"
     ["anew"]="go install github.com/tomnomnom/anew@latest"
+    ["shuffledns"]="go install github.com/projectdiscovery/shuffledns/cmd/shuffledns@latest"
 )
 
 # Install and test each tool individually (excluding amass)

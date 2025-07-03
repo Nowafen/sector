@@ -48,15 +48,18 @@ These include external utilities used for domain enumeration, content discovery,
   </summary>
     
 ```
-./sector -h
+sector -h
 
-Usage:
+Sector is a high-performance attack surface mapping and vulnerability assessment tool,
+designed to enhance your attack surface discovery with precision and depth.
+
+    Usage:
  sector [options]
 
-Options:
+    Options:
   
     -d, --domain {domain}
-    Specify a single target domain (e.g., example.com)
+     Specify a single target domain (e.g., example.com)
   
     -l, --list {file}
     Specify a file containing a list of domains to scan (e.g., file-domains.txt)
@@ -65,24 +68,42 @@ Options:
     Specify an IP for virtual host scanning (e.g., http://5.5.5.5)
   
     -nc, --nuclei
-    Smart scaning with private nuclei templates to find attack vectors
+    Perform advanced scanning to uncover potential attack vectors
+  
+    -pd, --parameter-discovery
+    Identify hidden URL parameters to expand attack surface
   
     -sjf, --smart-js-fuzzer
-    Smart fuzzing of JS file paths using ffuf to discover additional JS files
+    Enhance JS file discovery to broaden attack surface coverage
+  
+    -dbf, --dns-bruteforce
+    Enable comprehensive DNS enumeration (requires -dbw and -dbr)
+  
+    -dbw, --dns-bruteforce-wordlist {file}
+    Specify wordlist file for DNS enumeration (e.g., wordlist.txt)
+  
+    -dbr, --dns-bruteforce-resolvers {file}
+    Specify resolvers file for DNS enumeration (e.g., resolvers.txt)
+  
+    -t, --thread {low|medium|high}
+    Control parallel execution: low (2 tasks), medium (3 tasks, may stress the OS), high (all tasks, can heavily stress the OS (Default: None))
   
     -up, --update
-    update the version of tools
+    Update the tool to the latest version
   
     -h, --help
     Display this help menu
+    
+    Examples:
+    sector -d google.com -t medium
+    sector -d google.com -vhost http://85.85.69.69 -nc -t high
+    sector -l file-domains.txt -nc -t low
 
-
-    Version : 1.2.3
-
-Examples:
-  sector -d google.com
-  sector -d google.com -vhost http://85.85.1.1  -nuclei
-  sector -l file-domains.txt -nc
+    Version : 1.3.1
+    
+    Notes:
+     Using multiple switches will trigger a deep scan.
+     Please be patient as it may take significant time to complete.
 ```
 </details>
 

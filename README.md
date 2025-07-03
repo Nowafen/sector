@@ -108,4 +108,4 @@ designed to enhance your attack surface discovery with precision and depth.
 </details>
 
 ##### Contact 
-[🔗 Telegram Channel](https://t.me/Tellmejs)
+[🔗](https://t.me/Tellmejs)

@@ -30,6 +30,7 @@ echo "Setting GOPROXY to https://goproxy.io,direct"
 # Define tools and their installation commands (excluding amass)
 declare -A tools=(
     ["nuclei"]="go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+    ["unfurl"]="go install github.com/tomnomnom/unfurl@latest"
     ["subfinder"]="go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
     ["httpx"]="go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
     ["assetfinder"]="go install github.com/tomnomnom/assetfinder@latest"

@@ -10,14 +10,14 @@
 
 #### Features
 
-- ###### Subdomain Discovery: Gathers subdomains from multiple reliable sources.
-- ###### JavaScript Asset Collection: Extracts JavaScript URLs for potential analysis or fuzzing.
-- ###### Virtual Host Scanning: Supports mapping domains to specific IPs to uncover hidden hosts.
-- ###### Smart JS Fuzzing: Attempts to locate undiscovered JavaScript paths via intelligent fuzzing.
-- ###### Vulnerability Detection: Highlights suspicious patterns and integrates with advanced scanning engines.
-- ###### Progress Feedback: Displays interactive progress animations during operation.
+- ###### Comprehensive Subdomain Enumeration: Discovers subdomains by aggregating data from diverse, trusted sources for thorough coverage.
+- ###### Advanced JavaScript Asset Discovery: Identifies and extracts JavaScript URLs for in-depth analysis or targeted fuzzing.
+- ###### Virtual Host Mapping: Maps domains to specific IP addresses to reveal hidden or unlisted hosts with precision.
+- ###### Smart JS Fuzzing: Employs smart fuzzing techniques to uncover hidden JavaScript paths and expand attack surface visibility.
+- ###### Robust Vulnerability Scanning: Detects potential vulnerabilities by analyzing patterns and leveraging integration with cutting-edge scanning engines.
+- ###### Real-Time Progress Tracking: Provides dynamic, interactive progress indicators for a clear view of scan operations.
 - ###### Clean Output: Ensures deduplication and structured artifact generation.
-- ###### Self-Updating: Can automatically update itself to the latest available version.
+- ###### Automatic Updates: Seamlessly updates itself to the latest version to ensure access to the newest features and improvements.
 
 ---
 

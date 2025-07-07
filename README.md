@@ -108,9 +108,4 @@ designed to enhance your attack surface discovery with precision and depth.
 </details>
 
 
-
-
-
-
-##### Contact 
-[tellme](https://t.me/Tellmejs)
+end
